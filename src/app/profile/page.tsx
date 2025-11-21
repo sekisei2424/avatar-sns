@@ -1,13 +1,63 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Sidebar from '@/components/ui/Sidebar';
 import PostForm from '@/components/ui/PostForm';
 import Modal from '@/components/ui/Modal';
+import AuthModal from '@/components/auth/AuthModal';
 import { MapPin, Briefcase, Calendar } from 'lucide-react';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { supabaseService } from '@/services/supabaseService';
 
 export default function ProfilePage() {
     const [isPostFormOpen, setIsPostFormOpen] = useState(false);
+    const { user } = useAuth();
+    const [profile, setProfile] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const loadProfile = async () => {
+            if (user) {
+                const data = await supabaseService.fetchProfile(user.id);
+                setProfile(data);
+            }
+            setLoading(false);
+        };
+        loadProfile();
+    }, [user]);
+
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+    if (loading) return <div className="flex items-center justify-center h-screen bg-village-base text-white">Loading...</div>;
+
+    if (!user) {
+        return (
+            <div className="flex items-center justify-center h-screen bg-village-base">
+                <div className="text-center text-white space-y-6">
+                    <h1 className="text-3xl font-bold">Welcome to Village</h1>
+                    <p className="text-gray-300 text-lg">Join our community to create your profile and share your story.</p>
+
+                    <div className="flex flex-col gap-4 items-center">
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setIsAuthModalOpen(true)}
+                                className="px-8 py-3 bg-village-accent hover:bg-blue-600 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-blue-500/25"
+                            >
+                                Sign In / Sign Up
+                            </button>
+                            <a href="/" className="px-8 py-3 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold transition-all backdrop-blur-sm">
+                                Back to Home
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <AuthModal
+                    isOpen={isAuthModalOpen}
+                    onClose={() => setIsAuthModalOpen(false)}
+                />
+            </div>
+        );
+    }
 
     return (
         <main className="flex w-full h-screen bg-village-base overflow-hidden">
@@ -22,7 +72,9 @@ export default function ProfilePage() {
                 <div className="h-64 bg-gradient-to-r from-village-accent to-green-400 relative">
                     <div className="absolute -bottom-16 left-8">
                         <div className="w-32 h-32 bg-white rounded-full p-1 shadow-xl">
-                            <div className="w-full h-full bg-blue-500 rounded-full"></div>
+                            <div className="w-full h-full bg-blue-500 rounded-full flex items-center justify-center text-4xl text-white font-bold">
+                                {profile?.username?.[0]?.toUpperCase() || 'A'}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -30,8 +82,14 @@ export default function ProfilePage() {
                 <div className="pt-20 px-8 pb-8 max-w-5xl mx-auto">
                     <div className="flex justify-between items-start mb-8">
                         <div>
-                            <h1 className="text-4xl font-bold text-gray-800">My Avatar</h1>
-                            <p className="text-gray-500 text-lg">@my_avatar_id</p>
+                            <h1 className="text-4xl font-bold text-gray-800">{profile?.username || 'Anonymous'}</h1>
+                            <p className="text-gray-500 text-lg">@{profile?.id?.substring(0, 8)}</p>
+                            <span className={`inline-block mt-2 px-3 py-1 rounded-full text-sm font-medium ${profile?.user_type === 'company'
+                                ? 'bg-purple-100 text-purple-800'
+                                : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                {profile?.user_type === 'company' ? 'Company' : 'Individual'}
+                            </span>
                         </div>
                         <button className="px-6 py-2 border-2 border-gray-300 rounded-full font-bold text-gray-600 hover:bg-gray-50 transition-colors">
                             Edit Profile
@@ -41,15 +99,15 @@ export default function ProfilePage() {
                     <div className="flex gap-6 mb-8 text-gray-600">
                         <div className="flex items-center gap-2">
                             <MapPin size={20} />
-                            <span>North Village</span>
+                            <span>({profile?.current_location_x || 0}, {profile?.current_location_y || 0})</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <Briefcase size={20} />
-                            <span>Novice Farmer</span>
+                            <span>{profile?.user_type === 'company' ? 'Organization' : 'Villager'}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <Calendar size={20} />
-                            <span>Joined Nov 2025</span>
+                            <span>Joined {new Date(profile?.created_at).toLocaleDateString()}</span>
                         </div>
                     </div>
 
@@ -59,7 +117,7 @@ export default function ProfilePage() {
                             <div className="bg-white p-6 rounded-2xl shadow-sm">
                                 <h3 className="font-bold text-gray-800 mb-4">Bio</h3>
                                 <p className="text-gray-600 leading-relaxed">
-                                    Just moved to the village! I love farming and meeting new people. Currently looking for wood to build my house.
+                                    {profile?.description || "No bio yet."}
                                 </p>
                             </div>
 
@@ -68,11 +126,11 @@ export default function ProfilePage() {
                                 <div className="space-y-3">
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">Level</span>
-                                        <span className="font-bold text-village-accent">5</span>
+                                        <span className="font-bold text-village-accent">1</span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-gray-600">Reputation</span>
-                                        <span className="font-bold text-village-accent">120</span>
+                                        <span className="font-bold text-village-accent">0</span>
                                     </div>
                                 </div>
                             </div>
@@ -81,34 +139,24 @@ export default function ProfilePage() {
                         {/* Right Column: Posts/Activity */}
                         <div className="lg:col-span-2 space-y-6">
                             <h3 className="font-bold text-2xl text-gray-800">Recent Activity</h3>
-                            {[1, 2, 3].map((i) => (
-                                <div key={i} className="bg-white p-6 rounded-2xl shadow-sm hover:shadow-md transition-all">
-                                    <div className="flex items-center gap-3 mb-3">
-                                        <div className="w-10 h-10 bg-blue-500 rounded-full"></div>
-                                        <div>
-                                            <p className="font-bold text-gray-800">My Avatar</p>
-                                            <p className="text-xs text-gray-500">Yesterday</p>
-                                        </div>
-                                    </div>
-                                    <p className="text-gray-700">Just finished planting the new crop! Can't wait for harvest season.</p>
-                                    <div className="mt-4 h-48 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">
-                                        [Image Placeholder]
-                                    </div>
-                                </div>
-                            ))}
+                            <div className="bg-white p-6 rounded-2xl shadow-sm text-center text-gray-500">
+                                No recent activity.
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Modals */}
-            <Modal
-                isOpen={isPostFormOpen}
-                onClose={() => setIsPostFormOpen(false)}
-                title="Share Experience"
-            >
-                <PostForm onClose={() => setIsPostFormOpen(false)} />
-            </Modal>
+            {isPostFormOpen && (
+                <Modal
+                    isOpen={isPostFormOpen}
+                    onClose={() => setIsPostFormOpen(false)}
+                    title="Share Experience"
+                >
+                    <PostForm onClose={() => setIsPostFormOpen(false)} />
+                </Modal>
+            )}
         </main>
     );
 }

@@ -3,10 +3,12 @@ import { supabaseService, Post } from '@/services/supabaseService';
 
 interface PostData {
     id: string;
+    user_id?: string; // Added for messaging
     username: string;
     content: string;
     avatarColor: number;
     avatarPath: string;
+    avatar_type?: string | null;
 }
 
 export class PlazaScene extends Scene {
@@ -65,16 +67,29 @@ export class PlazaScene extends Scene {
     private async loadPosts() {
         const posts = await supabaseService.fetchPosts();
 
+        if (posts.length === 0) {
+            // Fallback: Create some "bot" NPCs if no posts exist
+            const botPosts: PostData[] = [
+                { id: 'bot1', username: 'Villager A', content: 'Welcome to the Village!', avatarColor: 0xFFFFFF, avatarPath: '', avatar_type: 'avatar1' },
+                { id: 'bot2', username: 'Villager B', content: 'Nice day, isn\'t it?', avatarColor: 0xFFFFFF, avatarPath: '', avatar_type: 'avatar2' },
+                { id: 'bot3', username: 'Elder', content: 'Have you checked the job board?', avatarColor: 0xFFFFFF, avatarPath: '', avatar_type: 'avatar3' },
+            ];
+            botPosts.forEach(post => this.createNPC(post));
+            return;
+        }
+
         posts.forEach((post: Post) => {
             // Map Supabase data to scene format
             // Use a default avatar if none specified, or map based on some logic
             // For now, we'll just randomize or use a hash of the ID to pick one
             const mappedPost: PostData = {
                 id: post.id,
+                user_id: post.user_id, // Map user_id
                 username: post.profiles?.username || 'Anonymous',
                 content: post.content,
                 avatarColor: 0xFFFFFF, // Not used with sprites
-                avatarPath: '' // Handled in createNPC
+                avatarPath: '', // Handled in createNPC
+                avatar_type: post.profiles?.avatar_type
             };
             this.createNPC(mappedPost);
         });
@@ -92,9 +107,16 @@ export class PlazaScene extends Scene {
         const startX = Math.random() * this.scale.width;
         const startY = Math.random() * this.scale.height;
 
-        // Randomly select an avatar
-        const avatarIndex = Phaser.Math.Between(1, 4);
-        const avatarKey = `avatar${avatarIndex}`;
+        // Determine avatar key from profile or deterministic fallback
+        let avatarKey = post.avatar_type || 'avatar1';
+        const validAvatars = ['avatar1', 'avatar2', 'avatar3', 'avatar4'];
+
+        if (!validAvatars.includes(avatarKey)) {
+            // Deterministic fallback based on username or ID
+            const seed = post.username.charCodeAt(0) + (post.username.charCodeAt(1) || 0);
+            const index = (seed % 4) + 1;
+            avatarKey = `avatar${index}`;
+        }
 
         // Map key to path (simplified for now, ideally use a map or object)
         const avatarPaths: Record<string, string> = {
